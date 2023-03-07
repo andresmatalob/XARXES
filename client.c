@@ -33,9 +33,10 @@ char random_number[7] = {'0','0','0','0','0','0','\0'};
 int actual_state; // estado actual del cliente es un int
 
 //sever information
-char id_server[6];
-char adress_MAC_server[12];
+char id_server[7];
+char adress_MAC_server[13];
 unsigned long ip_server;
+
 
 //tipos de PDU en el registro
 #define NO_RESPONSE 0X08
@@ -44,6 +45,12 @@ unsigned long ip_server;
 #define REGISTER_NACK 0X04
 #define REGISTER_REJ 0X06
 #define ERROR 0X0F
+
+//tipos de PDU en el alive
+#define ALIVE_INF 0X10
+#define ALIVE_ACK 0X12
+#define ALIVE_NACK 0X14
+#define ALIVE_REJ 0X16
 
 
 //estados del registro
@@ -58,8 +65,6 @@ unsigned long ip_server;
 #define MAX_FILE_PATH_LENGTH 100
 #define MAX_COMMANDS_LENGTH 100
 
-//paquete
-//package_to_send[78];
 char* package_to_check;
 
 //variables de control de programa (read configuration)
@@ -75,14 +80,8 @@ struct sockaddr_in	addr_server,addr_client;
 int sock_udp,sock_tcp;
 socklen_t laddr_server;
 
-struct pdu_upd{
-    unsigned char type;
-    char id_equip_pdu[7];
-    char address_MAC_pdu[13];
-    char num_aleatorio_pdu[7];
-    char data_pdu[50];
-};
-//variables client_registered
+
+//variables client_register
 #define T 1
 #define P 2
 #define Q 3
@@ -93,10 +92,17 @@ int tries_counter_registered = 0;
 int package_counter_registered= 0;
 int package_counter_alive= 0;
 
+//variables para el alive
+char port_udp_alive[50];
 
-void client_registered();
+void client_register();
 int timing_registered();
 
+void change_state(int state);
+
+void send_alive();
+
+//1. FASE REGISTRO
 //lee el fichero de configuracion y guarda los datos en las variables globales
 void read_configuration (char *config_file) {
     FILE *file; //puntero al fichero
@@ -168,7 +174,7 @@ void read_parameters (int argc, char *argv[]) {
 }
 char* create_package (int type, char* data){
     char* result;
-    result = (char*) malloc(78);
+    result = (char*) malloc(78*sizeof(char));
 
     result[0] = type;
     for (int i = 1; i < 8; i++){
@@ -203,18 +209,20 @@ void print_package (char* package_to_check){
 
 
     printf("ID del equipo: ");
-    for (int i = 1; i < 7; i++){
+    for (int i = 1; i < 8; i++){
         printf("%c", package_to_check[i]);
     }
     printf("\n");
 
     printf("Adress Mac: ");
-    for (int i = 7; i < 20; i++){
+    for (int i = 8; i < 21; i++){
         printf("%c", package_to_check[i]);
     }
 
+    printf("\n");
+
     printf("Random number: ");
-    for (int i = 20; i < 27; i++){
+    for (int i = 21; i < 28; i++){
         printf("%c", package_to_check[i]);
     }
     printf("\n");
@@ -227,6 +235,7 @@ void print_package (char* package_to_check){
 
 }
 
+// 2.FASE RESPUESTA
 void open_udp_socket(){
     sock_udp = socket(AF_INET, SOCK_DGRAM, 0);
     if(sock_udp < 0) //si despues de crearlo te ha devuelto menor que cero es porque no lo ha podido crear
@@ -298,20 +307,20 @@ void receive_udp_package(float waiting_time) {
 }
 
 void check_package(char* package_to_check){
-    for (int i = 1; i < 7; i++) {
+    for (int i = 1; i < 8; i++) {
         if (package_to_check[i] != id_equip[i - 1]) {
             printf("Not the expected id\n");
             exit(0);
         }
     }
-    for (int i = 7; i < 20; i++) {
-        if (package_to_check[i] != adress_MAC[i - 7]) {
+    for (int i = 8; i < 21; i++) {
+        if (package_to_check[i] != adress_MAC[i - 8]) {
             printf("Not the expected MAC\n");
             exit(0);
         }
     }
-    for (int i = 20; i < 27; i++){
-        if(package_to_check[i] != random_number[i-20]){
+    for (int i = 21; i < 27; i++){
+        if(package_to_check[i] != random_number[i-21]){
             printf("Not the expected number\n");
             exit(0);
         }
@@ -324,55 +333,63 @@ void check_package(char* package_to_check){
 void package_management_register(){
     receive_udp_package(timing_registered());
     if(package[0] == NO_RESPONSE){
+        change_state(WAIT_REG_RESPONSE);
+        printf("Actual state: WAIT_REG_RESPONSE\n");
 
-        if(package_counter_registered > N){
-            if(tries_counter_registered > O){
+        if(package_counter_registered >= N){
+            sleep(U);
+            tries_counter_registered++;
+            if(tries_counter_registered >= O){
                 printf("Se han superado el numero de intentos permitidos: %i, se finaliza el programa\n", O);
                 exit(0);
             }else{
-                tries_counter_registered++;
+                printf("intento nº %i\n", tries_counter_registered);
                 package_counter_registered = 0;
-                client_registered();
+                client_register();
             }
 
         } else {
             package_counter_registered++;
-            client_registered();
+            client_register();
         }
-
     }
+
     else if (package[0] == REGISTER_ACK) {
-        actual_state = REGISTERED;
+        change_state(REGISTERED);
         printf("Actual state: REGISTERED\n");
 
         //guardar el id_server, adress_MAC_server, ip_server
-        for (int i = 1; i < 7; i++) {
+        for (int i = 1; i < 8; i++) {
             id_server[i - 1] = package[i];
         }
-        for (int i = 7; i < 13; i++) {
-            adress_MAC_server[i - 7] = package[i];
+        for (int i = 8; i < 21; i++) {
+            adress_MAC_server[i - 8] = package[i];
         }
-        for (int i = 13; i < 20; i++) {
-            random_number[i - 13] = package[i];
+        for (int i = 21; i < 28; i++){
+            random_number[i-21] = package[i];
         }
-        ip_server = addr_server.sin_addr.s_addr;
 
+       //printf id_server value and adress_MAC_server value
+        printf("id_server: %s\n", id_server);
+        printf("adress_MAC_server: %s\n", adress_MAC_server);
+        printf("random_number: %s\n", random_number);
+        ip_server = addr_server.sin_addr.s_addr;
 
     }
 
-
     else if (package[0] == REGISTER_NACK){
         printf("Se ha recibido un paquete NACK\n");
-        for (int i = 28; i < 78 && package_to_check[i] != 0; i++){
-            printf("%c", package_to_check[i]);
+
+        for (int i = 28; i < 78 && package[i] != 0; i++){
+            printf("%c", package[i]);
         }
         printf("\n");
         tries_counter_registered++;
         package_counter_registered = 0;
-        client_registered();
+        client_register();
 
     } else if (package[0] == REGISTER_REJ){
-        actual_state = DISCONNECTED;
+        change_state(actual_state);
         printf("Actual state: %i\n", actual_state);
 
 
@@ -389,42 +406,62 @@ void package_management_register(){
 
 }
 
-
-int timing_registered() {
-    if (package_counter_registered < P) {
-        return T;
-    } else if (package_counter_registered < Q) {
-        return T *((package_counter_registered - P) + 1);
-    } else {
-        return T * Q;
-    }
-}
-
-void client_registered(){
-    send_udp_package(create_package(REGISTER_REQ, "Hola"));
-    actual_state = WAIT_REG_RESPONSE;
-    package_management_register();
-}
-
 void change_state(int state) {
     if (actual_state != state) {
         actual_state = state;
         printf("Actual state: %i\n", actual_state);
     }
+
 }
+
+
+int timing_registered() {
+    if (package_counter_registered < P) {
+        printf("timing en los primeros p paquetes = %i\n", T);
+        return T;
+    } else if (package_counter_registered - P < Q) {
+        printf("timing en los siguientes q paquetes = %i\n", T *((package_counter_registered - P) + 1));
+        return T *((package_counter_registered - P) + 1);
+    } else {
+        printf("timing en los siguientes paquetes = %i\n", T * Q);
+        return T * Q;
+    }
+}
+
+void client_register(){
+    send_udp_package(create_package(REGISTER_REQ, "Hola"));
+    actual_state = WAIT_REG_RESPONSE;
+    package_management_register();
+}
+
+//2.MANTENER COMUNICACIÓN PERIÓDICA CON EL SERVIDOR
+
+/*void *send_alive_package(){
+    if (actual_state == REGISTERED) {
+        send_udp_package(create_package(ALIVE_INF, "Hola"));
+        printf("Se ha enviado un paquete ALIVE\n");
+    }
+}
+ */
+
+
+
 
 int main(int argc, char *argv[]) {
     strcpy(config_file, "client.cfg"); //default configuration file
     read_parameters(argc, argv);
     read_configuration(config_file); //read the configuration file
-
-    create_package(REGISTER_REQ, "Hola");
-    print_package(create_package(REGISTER_REQ,  "Hola"));
+    //create_package(REGISTER_REJ, "Hola");//
+    //print_package(create_package(ERROR, "Hola"));
     open_udp_socket();
-    send_udp_package(create_package(REGISTER_REQ, "Hola"));
-    print_debug("Hemos enviado el paquete");
-    receive_udp_package(2);
-    print_package(package);
+    client_register();
+
+    printf("\n");
+    //print_debug("Hemos enviado el paquete");
+
+
+    //receive_udp_package(2)  ;
+    //print_package(package);
 }
 
 

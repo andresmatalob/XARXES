@@ -101,7 +101,7 @@ client.c</font>
     <span class="s4">char </span><span class="s1">num_aleatorio_pdu[</span><span class="s5">7</span><span class="s1">]</span><span class="s4">;</span>
     <span class="s4">char </span><span class="s1">data_pdu[</span><span class="s5">50</span><span class="s1">]</span><span class="s4">;</span>
 <span class="s1">}</span><span class="s4">;</span>
-<span class="s0">//variables client_registered</span>
+<span class="s0">//variables client_register</span>
 <span class="s2">#define </span><span class="s1">T </span><span class="s5">1</span>
 <span class="s2">#define </span><span class="s1">P </span><span class="s5">2</span>
 <span class="s2">#define </span><span class="s1">Q </span><span class="s5">3</span>
@@ -113,7 +113,7 @@ client.c</font>
 <span class="s4">int </span><span class="s1">package_counter_alive= </span><span class="s5">0</span><span class="s4">;</span>
 
 
-<span class="s4">void </span><span class="s1">client_registered()</span><span class="s4">;</span>
+<span class="s4">void </span><span class="s1">client_register()</span><span class="s4">;</span>
 <span class="s4">int </span><span class="s1">timing_registered()</span><span class="s4">;</span>
 
 <span class="s0">//lee el fichero de configuracion y guarda los datos en las variables globales</span>
@@ -351,12 +351,12 @@ client.c</font>
             <span class="s1">}</span><span class="s4">else</span><span class="s1">{</span>
                 <span class="s1">tries_counter_registered++</span><span class="s4">;</span>
                 <span class="s1">package_counter_registered = </span><span class="s5">0</span><span class="s4">;</span>
-                <span class="s1">client_registered()</span><span class="s4">;</span>
+                <span class="s1">client_register()</span><span class="s4">;</span>
             <span class="s1">}</span>
 
         <span class="s1">} </span><span class="s4">else </span><span class="s1">{</span>
             <span class="s1">package_counter_registered++</span><span class="s4">;</span>
-            <span class="s1">client_registered()</span><span class="s4">;</span>
+            <span class="s1">client_register()</span><span class="s4">;</span>
         <span class="s1">}</span>
 
     <span class="s1">}</span>
@@ -388,7 +388,7 @@ client.c</font>
         <span class="s1">printf(</span><span class="s3">&quot;</span><span class="s4">\n</span><span class="s3">&quot;</span><span class="s1">)</span><span class="s4">;</span>
         <span class="s1">tries_counter_registered++</span><span class="s4">;</span>
         <span class="s1">package_counter_registered = </span><span class="s5">0</span><span class="s4">;</span>
-        <span class="s1">client_registered()</span><span class="s4">;</span>
+        <span class="s1">client_register()</span><span class="s4">;</span>
 
     <span class="s1">} </span><span class="s4">else if </span><span class="s1">(package[</span><span class="s5">0</span><span class="s1">] == REGISTER_REJ){</span>
         <span class="s1">actual_state = DISCONNECTED</span><span class="s4">;</span>
@@ -419,7 +419,7 @@ client.c</font>
     <span class="s1">}</span>
 <span class="s1">}</span>
 
-<span class="s4">void </span><span class="s1">client_registered(){</span>
+<span class="s4">void </span><span class="s1">client_register(){</span>
     <span class="s1">send_udp_package(create_package(REGISTER_REQ</span><span class="s4">, </span><span class="s3">&quot;Hola&quot;</span><span class="s1">))</span><span class="s4">;</span>
     <span class="s1">actual_state = WAIT_REG_RESPONSE</span><span class="s4">;</span>
     <span class="s1">package_management_register()</span><span class="s4">;</span>
