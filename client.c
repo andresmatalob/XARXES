@@ -24,6 +24,9 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 
+//variables globales
+pthread_t listen_com = (pthread_t) NULL;
+
 //client information
 char id_equip[6];
 char adress_MAC[12];
@@ -108,6 +111,7 @@ void change_state(int state);
 void send_alive();
 
 void keep_in_touch();
+void* command_line();
 
 //1. FASE REGISTRO
 //lee el fichero de configuracion y guarda los datos en las variables globales
@@ -462,6 +466,7 @@ void alive_try(){
         else if(package[0] == ALIVE_ACK){
             printf("Se ha recibido un paquete ACK\n");
             change_state(SEND_ALIVE);
+            pthread_create(&listen_com, NULL, command_line, NULL);
             keep_in_touch();
         }
         else if(package[0] == ALIVE_NACK){
@@ -488,10 +493,15 @@ void alive_try(){
 
 void keep_in_touch() {
     while (actual_state == SEND_ALIVE) {
+        command_line();
+
 
     }
 }
+void* command_line(){
 
+
+}
 
 int main(int argc, char *argv[]) {
     strcpy(config_file, "client.cfg"); //default configuration file
