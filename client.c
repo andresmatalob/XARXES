@@ -53,6 +53,7 @@ unsigned long ip_server;
 #define ALIVE_REJ 0X16
 
 
+
 //estados del registro
 #define DISCONNECTED 0XA0
 #define WAIT_REG_RESPONSE 0XA2
@@ -93,7 +94,11 @@ int package_counter_registered= 0;
 int package_counter_alive= 0;
 
 //variables para el alive
+#define S 3
+#define R 2
 char port_udp_alive[50];
+int lost_alives = 0;
+
 
 void client_register();
 int timing_registered();
@@ -101,6 +106,8 @@ int timing_registered();
 void change_state(int state);
 
 void send_alive();
+
+void keep_in_touch();
 
 //1. FASE REGISTRO
 //lee el fichero de configuracion y guarda los datos en las variables globales
@@ -374,7 +381,6 @@ void package_management_register(){
         printf("adress_MAC_server: %s\n", adress_MAC_server);
         printf("random_number: %s\n", random_number);
         ip_server = addr_server.sin_addr.s_addr;
-
     }
 
     else if (package[0] == REGISTER_NACK){
@@ -436,15 +442,55 @@ void client_register(){
 
 //2.MANTENER COMUNICACIÓN PERIÓDICA CON EL SERVIDOR
 
-/*void *send_alive_package(){
-    if (actual_state == REGISTERED) {
+void alive_try(){
+    while (actual_state == REGISTERED) {
+        package_counter_alive = 0;
         send_udp_package(create_package(ALIVE_INF, "Hola"));
-        printf("Se ha enviado un paquete ALIVE\n");
+        receive_udp_package(R);
+
+        if(package[0] == NO_RESPONSE){
+            if (lost_alives > R) {
+                change_state(DISCONNECTED);
+                lost_alives++;
+                package_counter_alive = 0;
+            }else{
+                printf("No se ha recibido respuesta del servidor\n");
+                package_counter_alive++;
+            }
+
+        }
+        else if(package[0] == ALIVE_ACK){
+            printf("Se ha recibido un paquete ACK\n");
+            change_state(SEND_ALIVE);
+            keep_in_touch();
+        }
+        else if(package[0] == ALIVE_NACK){
+            printf("Se ha recibido un paquete NACK\n");
+            if (lost_alives > S){
+                change_state(DISCONNECTED);
+                alive_try();
+            }else{
+                change_state(REGISTERED);
+                lost_alives++;
+            }
+        }
+        else if(package[0] == ALIVE_REJ){
+            printf("Se ha recibido un paquete REJ\n");
+            change_state(DISCONNECTED);
+            alive_try();
+        }
+        else{
+            printf("Se ha recibido un paquete no reconocido\n");
+        }
+    }
+
+}
+
+void keep_in_touch() {
+    while (actual_state == SEND_ALIVE) {
+
     }
 }
- */
-
-
 
 
 int main(int argc, char *argv[]) {
@@ -455,6 +501,7 @@ int main(int argc, char *argv[]) {
     //print_package(create_package(ERROR, "Hola"));
     open_udp_socket();
     client_register();
+    alive_try();
 
     printf("\n");
     //print_debug("Hemos enviado el paquete");
