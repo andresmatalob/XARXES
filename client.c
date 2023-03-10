@@ -24,9 +24,6 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 
-//variables globales
-pthread_t listen_com = (pthread_t) NULL;
-
 //client information
 char id_equip[6];
 char adress_MAC[12];
@@ -56,7 +53,6 @@ unsigned long ip_server;
 #define ALIVE_REJ 0X16
 
 
-
 //estados del registro
 #define DISCONNECTED 0XA0
 #define WAIT_REG_RESPONSE 0XA2
@@ -81,7 +77,7 @@ char* package;
 
 //variables locales sockect
 struct sockaddr_in	addr_server,addr_client;
-int sock_udp,sock_tcp;
+int sock_udp;
 socklen_t laddr_server;
 
 
@@ -108,10 +104,10 @@ int timing_registered();
 
 void change_state(int state);
 
-void send_alive();
-
 void keep_in_touch();
-void* command_line();
+void command_line();
+
+void package_management_alive();
 
 //1. FASE REGISTRO
 //lee el fichero de configuracion y guarda los datos en las variables globales
@@ -168,7 +164,7 @@ void read_parameters (int argc, char *argv[]) {
             }
         } else if (strcmp(argv[i], "-d") == 0){
             debug = true;
-            printf("Debug mode activated.\n");
+            //printf("Debug mode activated.\n");
         } else if (strcmp(argv[i], "-f") == 0) {
             if (i + 1 < argc) {
                 i++;
@@ -303,16 +299,26 @@ void receive_udp_package(float waiting_time) {
         printf("No se han recibido paquetes en el tiempo\n");
         package[0]=NO_RESPONSE;
     } else {
+        printf("Se ha recibido un paquete %x\n",  package[0]);
         if (package[0] == REGISTER_ACK) {
-            printf("Se ha recibido un ACK\n");
+            printf("Se ha recibido un REGISTER_ACK\n");
         } else if (package[0] == REGISTER_NACK) {
-            printf("Se ha recibido un NACK\n");
+            printf("Se ha recibido un REGISTER_NACK\n");
         } else if (package[0] == REGISTER_REJ) {
-            printf("Se ha recibido un REJ\n");
+            printf("Se ha recibido un REGISTER_REJ\n");
         } else if (package[0] == REGISTER_REQ) {
-            printf("Se ha recibido un REQ\n");
+            printf("Se ha recibido un REGISTER_REQ\n");
+        } else if (package[0] == ALIVE_ACK) {
+            printf("Se ha recibido un ALIVE_ACK\n");
+        } else if (package[0] == ALIVE_NACK) {
+            printf("Se ha recibido un ALIVE_NACK\n");
+        } else if (package[0] == ALIVE_REJ) {
+            printf("Se ha recibido un ALIVE_REJ\n");
+        } else if (package[0] == ALIVE_INF) {
+            printf("Se ha recibido un ALIVE_INF\n");
         } else {
             printf("Se ha recibido un paquete no reconocido\n");
+            print_package(package);
         }
     }
 }
@@ -450,13 +456,16 @@ void alive_try(){
     while (actual_state == REGISTERED) {
         package_counter_alive = 0;
         send_udp_package(create_package(ALIVE_INF, "Hola"));
+
         receive_udp_package(R);
 
         if(package[0] == NO_RESPONSE){
             if (lost_alives > R) {
                 change_state(DISCONNECTED);
                 lost_alives++;
+                printf("1\n");
                 package_counter_alive = 0;
+
             }else{
                 printf("No se ha recibido respuesta del servidor\n");
                 package_counter_alive++;
@@ -466,7 +475,6 @@ void alive_try(){
         else if(package[0] == ALIVE_ACK){
             printf("Se ha recibido un paquete ACK\n");
             change_state(SEND_ALIVE);
-            pthread_create(&listen_com, NULL, command_line, NULL);
             keep_in_touch();
         }
         else if(package[0] == ALIVE_NACK){
@@ -493,15 +501,85 @@ void alive_try(){
 
 void keep_in_touch() {
     while (actual_state == SEND_ALIVE) {
+        printf("paquete recibido %x\n", package[0]);
         command_line();
-
+        printf("voy a enviar un paquete alive\n");
+        send_udp_package(create_package(ALIVE_INF, "Hola"));
+        printf("he enviado un paquete alive\n");
+        print_package(package);
+        package_management_alive();
 
     }
 }
-void* command_line(){
 
+void package_management_alive() {
+    receive_udp_package(R);
+    if (package[0] == NO_RESPONSE){
+        printf("alives: %i\n", lost_alives);
+        printf("aqii");
+        if (lost_alives > S){
+            change_state(DISCONNECTED);
+            printf("Actual: %c\n", package[0]);
+            client_register();
+        } else {
+            change_state(REGISTERED);
+            printf("Actual state: %i\n", actual_state);
+            lost_alives++;
+        }
+    } else if (package[0] == ALIVE_ACK){
+        printf("Se ha recibido un paquete ACK\n");
+        sleep(U);
+        change_state(SEND_ALIVE);
+        printf("Actual state: %i\n", actual_state);
+        keep_in_touch();
 
+    } else if (package[0] == ALIVE_REJ){
+        printf("Se ha recibido un paquete REJ\n");
+        change_state(DISCONNECTED);
+        alive_try();
+    } else{
+        if (lost_alives > S){
+            change_state(DISCONNECTED);
+            alive_try();
+        } else {
+            change_state(REGISTERED);
+            lost_alives++;
+        }
+    }
 }
+
+//3. LEER COMANDOS DE LA LÍNEA DE COMANDOS
+void command_line() {
+    printf("entrando en command_line\n");
+    fd_set readfds;
+    char command [100];
+    struct timeval tv;
+    int err;
+    FD_ZERO(&readfds); // borra los conjuntos de descriptores de fichero
+    FD_SET(0, &readfds); // añade el descriptor de fichero 0 (stdin) al conjunto
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    err = select(1, &readfds, NULL, NULL, &tv);
+    if (err > 0) {
+        printf("Se ha recibido algo\n");
+        scanf("%s", command);
+        if (strcmp(command, "quit") == 0){
+            printf("Se ha recibido el comando quit\n");
+            close(sock_udp);
+            exit(0);
+
+        }
+        if (strcmp(command, "send-cfg") == 0){
+            printf("Se ha recibido el comando send-cfg\n");;
+        }
+        if (strcmp(command, "get-cfg") == 0){
+            printf("Se ha recibido el comando get-cfg\n");
+        }
+    } else if (err == -1 ){
+        printf("Error en el select\n");
+    }
+}
+
 
 int main(int argc, char *argv[]) {
     strcpy(config_file, "client.cfg"); //default configuration file
@@ -515,10 +593,6 @@ int main(int argc, char *argv[]) {
 
     printf("\n");
     //print_debug("Hemos enviado el paquete");
-
-
     //receive_udp_package(2)  ;
     //print_package(package);
 }
-
-
