@@ -215,30 +215,30 @@ void print_package (char* package_to_check){
     printf("Tipo de paquete: %x\n", package_to_check[0]);
 
 
-    printf("ID del equipo: ");
+    //printf("ID del equipo: ");
     for (int i = 1; i < 8; i++){
         printf("%c", package_to_check[i]);
     }
-    printf("\n");
+    //printf("\n");
 
-    printf("Adress Mac: ");
+    //printf("Adress Mac: ");
     for (int i = 8; i < 21; i++){
         printf("%c", package_to_check[i]);
     }
 
-    printf("\n");
+    //printf("\n");
 
-    printf("Random number: ");
+    //printf("Random number: ");
     for (int i = 21; i < 28; i++){
         printf("%c", package_to_check[i]);
     }
-    printf("\n");
+    //printf("\n");
 
-    printf("Datos: ");
+    //printf("Datos: ");
     for (int i = 28; i < 78 && package_to_check[i] != 0; i++){
         printf("%c", package_to_check[i]);
     }
-    printf("\n");
+    //printf("\n");
 
 }
 
@@ -268,7 +268,7 @@ void open_udp_socket(){
     addr_server.sin_family = AF_INET;
     addr_server.sin_port = htons(atoi(NMS_UDP_port));
     addr_server.sin_addr.s_addr = atoi(NMS_id);
-    printf("succesfull socket!!!\n");
+    //printf("succesfull socket!!!\n");
 
 }
 void send_udp_package(char* package_to_send){
@@ -276,7 +276,7 @@ void send_udp_package(char* package_to_send){
         printf("Error sending package\n");
     }
     else{
-        printf("Package sent\n");
+        //printf("Package sent\n");
 
     }
 
@@ -363,6 +363,7 @@ void package_management_register(){
                 printf("intento nº %i\n", tries_counter_registered);
                 package_counter_registered = 0;
                 client_register();
+
             }
 
         } else {
@@ -536,7 +537,7 @@ void package_management_alive() {
     } else if (package[0] == ALIVE_REJ){
         printf("Se ha recibido un paquete REJ\n");
         change_state(DISCONNECTED);
-        alive_try();
+        client_register();
     } else{
         if (lost_alives > S){
             change_state(DISCONNECTED);
