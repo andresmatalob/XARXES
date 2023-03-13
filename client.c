@@ -459,19 +459,17 @@ void alive_try(){
         send_udp_package(create_package(ALIVE_INF, "Hola"));
 
         receive_udp_package(R);
-
+        //si no se recibe respuesta del servidor de la recepción del paquete ALIVE_INF a R paquetes, se finaliza el programa pasara a estado DISCONNECTED y se iniciara el proceso de registro
+        //comporbamos que el numero de alives perdidos no sea mayor que S, si es mayor se finaliza el programa
         if(package[0] == NO_RESPONSE){
-            if (lost_alives > R) {
+            printf("No se ha recibido respuesta del servidor\n");
+            if (lost_alives > R){
                 change_state(DISCONNECTED);
-                lost_alives++;
-                printf("1\n");
-                package_counter_alive = 0;
-
+                alive_try();
             }else{
-                printf("No se ha recibido respuesta del servidor\n");
-                package_counter_alive++;
+                change_state(REGISTERED);
+                lost_alives++;
             }
-
         }
         else if(package[0] == ALIVE_ACK){
             printf("Se ha recibido un paquete ACK\n");
