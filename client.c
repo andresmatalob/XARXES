@@ -76,7 +76,7 @@ char* ip_client = "127.0.0.1";
 char* package;
 
 //variables locales sockect
-struct sockaddr_in	addr_server,addr_client;
+struct sockaddr_in	addr_server,addr_client,saved_addr_server;
 int sock_udp;
 socklen_t laddr_server;
 
@@ -212,31 +212,31 @@ char* create_package (int type, char* data){
 }
 void print_package (char* package_to_check){
 
-    printf("Tipo de paquete: %x\n", package_to_check[0]);
+    //printf("Tipo de paquete: %x\n", package_to_check[0]);
 
 
     //printf("ID del equipo: ");
     for (int i = 1; i < 8; i++){
-        printf("%c", package_to_check[i]);
+        //printf("%c", package_to_check[i]);
     }
     //printf("\n");
 
     //printf("Adress Mac: ");
     for (int i = 8; i < 21; i++){
-        printf("%c", package_to_check[i]);
+        //printf("%c", package_to_check[i]);
     }
 
     //printf("\n");
 
     //printf("Random number: ");
     for (int i = 21; i < 28; i++){
-        printf("%c", package_to_check[i]);
+        //printf("%c", package_to_check[i]);
     }
     //printf("\n");
 
     //printf("Datos: ");
     for (int i = 28; i < 78 && package_to_check[i] != 0; i++){
-        printf("%c", package_to_check[i]);
+        //printf("%c", package_to_check[i]);
     }
     //printf("\n");
 
@@ -247,7 +247,7 @@ void open_udp_socket(){
     sock_udp = socket(AF_INET, SOCK_DGRAM, 0);
     if(sock_udp < 0) //si despues de crearlo te ha devuelto menor que cero es porque no lo ha podido crear
     {
-        printf("Can´t open socket!!!\n");
+        //printf("Can´t open socket!!!\n");
         exit(-1);
     }
 
@@ -259,7 +259,7 @@ void open_udp_socket(){
     /* binding (ligar) */
     if(bind(sock_udp, (struct sockaddr *)&addr_client, sizeof(struct sockaddr_in)) < 0)
     {
-        fprintf(stderr, " Can´t do socket's binding !!!\n");
+        //fprintf(stderr, " Can´t do socket's binding !!!\n");
         exit(-2);
     }
 
@@ -299,53 +299,55 @@ void receive_udp_package(float waiting_time) {
         printf("No se han recibido paquetes en el tiempo\n");
         package[0]=NO_RESPONSE;
     } else {
-        printf("Se ha recibido un paquete %x\n",  package[0]);
         if (package[0] == REGISTER_ACK) {
-            printf("Se ha recibido un REGISTER_ACK\n");
+            print_debug("Se ha recibido un REGISTER_ACK\n");
         } else if (package[0] == REGISTER_NACK) {
-            printf("Se ha recibido un REGISTER_NACK\n");
+            print_debug("Se ha recibido un REGISTER_NACK\n");
         } else if (package[0] == REGISTER_REJ) {
-            printf("Se ha recibido un REGISTER_REJ\n");
+            print_debug("Se ha recibido un REGISTER_REJ\n");
         } else if (package[0] == REGISTER_REQ) {
-            printf("Se ha recibido un REGISTER_REQ\n");
+            print_debug("Se ha recibido un REGISTER_REQ\n");
         } else if (package[0] == ALIVE_ACK) {
-            printf("Se ha recibido un ALIVE_ACK\n");
+            print_debug("Se ha recibido un ALIVE_ACK\n");
         } else if (package[0] == ALIVE_NACK) {
-            printf("Se ha recibido un ALIVE_NACK\n");
+            print_debug("Se ha recibido un ALIVE_NACK\n");
         } else if (package[0] == ALIVE_REJ) {
-            printf("Se ha recibido un ALIVE_REJ\n");
+            print_debug("Se ha recibido un ALIVE_REJ\n");
         } else if (package[0] == ALIVE_INF) {
-            printf("Se ha recibido un ALIVE_INF\n");
+            print_debug("Se ha recibido un ALIVE_INF\n");
         } else {
-            printf("Se ha recibido un paquete no reconocido\n");
+            print_debug("Se ha recibido un paquete no reconocido\n");
             print_package(package);
         }
     }
 }
 
-void check_package(char* package_to_check){
+bool check_package(char* package_to_check){
     for (int i = 1; i < 8; i++) {
-        if (package_to_check[i] != id_equip[i - 1]) {
+        if (package_to_check[i] != id_server[i - 1]) {
             printf("Not the expected id\n");
-            exit(0);
+            return false;
         }
     }
     for (int i = 8; i < 21; i++) {
-        if (package_to_check[i] != adress_MAC[i - 8]) {
+        if (package_to_check[i] != adress_MAC_server[i - 8]) {
             printf("Not the expected MAC\n");
-            exit(0);
+
+            return false;
         }
     }
     for (int i = 21; i < 27; i++){
         if(package_to_check[i] != random_number[i-21]){
             printf("Not the expected number\n");
-            exit(0);
+            return false;
         }
     }
-    if(addr_server.sin_addr.s_addr != ip_server){
+    printf("IP: %s\n", inet_ntoa(addr_server.sin_addr));
+    if(strcmp(inet_ntoa(addr_server.sin_addr), inet_ntoa(saved_addr_server.sin_addr)) != 0){
         printf("Not the expected ip\n");
-        exit(0);
+        return false;
     }
+    return true;
 }
 void package_management_register(){
     receive_udp_package(timing_registered());
@@ -391,11 +393,11 @@ void package_management_register(){
         printf("id_server: %s\n", id_server);
         printf("adress_MAC_server: %s\n", adress_MAC_server);
         printf("random_number: %s\n", random_number);
-        ip_server = addr_server.sin_addr.s_addr;
+        saved_addr_server = addr_server;
     }
 
     else if (package[0] == REGISTER_NACK){
-        printf("Se ha recibido un paquete NACK\n");
+        //printf("Se ha recibido un paquete NACK\n");
 
         for (int i = 28; i < 78 && package[i] != 0; i++){
             printf("%c", package[i]);
@@ -411,8 +413,8 @@ void package_management_register(){
 
 
         printf("Se ha recibido un paquete REJ, se finaliza el programa\n");
-        for (int i = 28; i < 78 && package_to_check[i] != 0; i++){
-            printf("%c", package_to_check[i]);
+        for (int i = 28; i < 78 && package[i] != 0; i++){
+            printf("%c", package[i]);
         }
         printf("\n");
         exit(0);
@@ -446,7 +448,7 @@ int timing_registered() {
 }
 
 void client_register(){
-    send_udp_package(create_package(REGISTER_REQ, "Hola"));
+    send_udp_package(create_package(REGISTER_REQ, ""));
     actual_state = WAIT_REG_RESPONSE;
     package_management_register();
 }
@@ -456,7 +458,7 @@ void client_register(){
 void alive_try(){
     while (actual_state == REGISTERED) {
         package_counter_alive = 0;
-        send_udp_package(create_package(ALIVE_INF, "Hola"));
+        send_udp_package(create_package(ALIVE_INF, ""));
 
         receive_udp_package(R);
         //si no se recibe respuesta del servidor de la recepción del paquete ALIVE_INF a R paquetes, se finaliza el programa pasara a estado DISCONNECTED y se iniciara el proceso de registro
@@ -472,9 +474,21 @@ void alive_try(){
             }
         }
         else if(package[0] == ALIVE_ACK){
-            printf("Se ha recibido un paquete ACK\n");
-            change_state(SEND_ALIVE);
-            keep_in_touch();
+            if (check_package(package)== false){
+                printf("Se ha recibido un paquete con distinta PDU\n");
+                if (lost_alives > R){
+                    change_state(DISCONNECTED);
+                    alive_try();
+                }else{
+                    change_state(REGISTERED);
+                    lost_alives++;
+                }
+
+            }else{
+                printf("Se ha recibido un paquete ACK\n");
+                change_state(SEND_ALIVE);
+                keep_in_touch();
+            }
         }
         else if(package[0] == ALIVE_NACK){
             printf("Se ha recibido un paquete NACK\n");
@@ -490,6 +504,15 @@ void alive_try(){
             printf("Se ha recibido un paquete REJ\n");
             change_state(DISCONNECTED);
             alive_try();
+        } else if (check_package(package) == false) {
+            printf("Se ha recibido un paquete con distinta PDU\n");
+            if (lost_alives > R){
+                change_state(DISCONNECTED);
+                alive_try();
+            }else{
+                change_state(REGISTERED);
+                lost_alives++;
+            }
         }
         else{
             printf("Se ha recibido un paquete no reconocido\n");
@@ -500,11 +523,11 @@ void alive_try(){
 
 void keep_in_touch() {
     while (actual_state == SEND_ALIVE) {
-        printf("paquete recibido %x\n", package[0]);
+        //printf("paquete recibido %x\n", package[0]);
         command_line();
-        printf("voy a enviar un paquete alive\n");
-        send_udp_package(create_package(ALIVE_INF, "Hola"));
-        printf("he enviado un paquete alive\n");
+        //printf("voy a enviar un paquete alive\n");
+        send_udp_package(create_package(ALIVE_INF, ""));
+        //printf("he enviado un paquete alive\n");
         print_package(package);
         package_management_alive();
 
@@ -514,29 +537,37 @@ void keep_in_touch() {
 void package_management_alive() {
     receive_udp_package(R);
     if (package[0] == NO_RESPONSE){
-        printf("alives: %i\n", lost_alives);
-        printf("aqii");
         if (lost_alives > S){
             change_state(DISCONNECTED);
-            printf("Actual: %c\n", package[0]);
+            //printf("Actual: %c\n", package[0]);
             client_register();
         } else {
             change_state(REGISTERED);
-            printf("Actual state: %i\n", actual_state);
+            //printf("Actual state: %i\n", actual_state);
             lost_alives++;
         }
     } else if (package[0] == ALIVE_ACK){
-        printf("Se ha recibido un paquete ACK\n");
-        sleep(U);
-        change_state(SEND_ALIVE);
-        printf("Actual state: %i\n", actual_state);
-        keep_in_touch();
-
+        if (check_package(package) == false){
+            if (lost_alives > R){
+                change_state(DISCONNECTED);
+                client_register();
+            } else {
+                change_state(REGISTERED);
+                lost_alives++;
+            }
+        } else {
+            lost_alives = 0;
+            printf("Se ha recibido un paquete ACK\n");
+            sleep(U);
+            change_state(SEND_ALIVE);
+            keep_in_touch();
+        }
     } else if (package[0] == ALIVE_REJ){
         printf("Se ha recibido un paquete REJ\n");
         change_state(DISCONNECTED);
         client_register();
-    } else{
+    }
+    else{
         if (lost_alives > S){
             change_state(DISCONNECTED);
             alive_try();
@@ -549,7 +580,7 @@ void package_management_alive() {
 
 //3. LEER COMANDOS DE LA LÍNEA DE COMANDOS
 void command_line() {
-    printf("entrando en command_line\n");
+    //printf("entrando en command_line\n");
     fd_set readfds;
     char command [100];
     struct timeval tv;
@@ -560,7 +591,6 @@ void command_line() {
     tv.tv_usec = 0;
     err = select(1, &readfds, NULL, NULL, &tv);
     if (err > 0) {
-        printf("Se ha recibido algo\n");
         scanf("%s", command);
         if (strcmp(command, "quit") == 0){
             printf("Se ha recibido el comando quit\n");
