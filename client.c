@@ -298,6 +298,7 @@ void receive_udp_package(float waiting_time) {
     if (recvfrom(sock_udp, package, 78, 0,(struct sockaddr *) &addr_server, &laddr_server) < 0) {
         printf("No se han recibido paquetes en el tiempo\n");
         package[0]=NO_RESPONSE;
+
     } else {
         if (package[0] == REGISTER_ACK) {
             print_debug("Se ha recibido un REGISTER_ACK\n");
@@ -458,6 +459,7 @@ void client_register(){
 void alive_try(){
     while (actual_state == REGISTERED) {
         package_counter_alive = 0;
+        lost_alives = 0;
         send_udp_package(create_package(ALIVE_INF, ""));
 
         receive_udp_package(R);
@@ -465,7 +467,7 @@ void alive_try(){
         //comporbamos que el numero de alives perdidos no sea mayor que S, si es mayor se finaliza el programa
         if(package[0] == NO_RESPONSE){
             printf("No se ha recibido respuesta del servidor\n");
-            if (lost_alives > R){
+            if (lost_alives >= S){
                 change_state(DISCONNECTED);
                 alive_try();
             }else{
@@ -476,7 +478,7 @@ void alive_try(){
         else if(package[0] == ALIVE_ACK){
             if (check_package(package)== false){
                 printf("Se ha recibido un paquete con distinta PDU\n");
-                if (lost_alives > R){
+                if (lost_alives >=S){
                     change_state(DISCONNECTED);
                     alive_try();
                 }else{
@@ -492,7 +494,7 @@ void alive_try(){
         }
         else if(package[0] == ALIVE_NACK){
             printf("Se ha recibido un paquete NACK\n");
-            if (lost_alives > S){
+            if (lost_alives >= S){
                 change_state(DISCONNECTED);
                 alive_try();
             }else{
@@ -506,7 +508,7 @@ void alive_try(){
             alive_try();
         } else if (check_package(package) == false) {
             printf("Se ha recibido un paquete con distinta PDU\n");
-            if (lost_alives > R){
+            if (lost_alives >= S){
                 change_state(DISCONNECTED);
                 alive_try();
             }else{
@@ -537,24 +539,27 @@ void keep_in_touch() {
 void package_management_alive() {
     receive_udp_package(R);
     if (package[0] == NO_RESPONSE){
-        if (lost_alives > S){
+        if (lost_alives >= S-1){
+            printf("No se ha recibido respuesta del servidor\n");
             change_state(DISCONNECTED);
-            //printf("Actual: %c\n", package[0]);
             client_register();
+            printf("Actual state: %i\n", actual_state);
+
         } else {
-            change_state(REGISTERED);
             //printf("Actual state: %i\n", actual_state);
             lost_alives++;
         }
+
     } else if (package[0] == ALIVE_ACK){
         if (check_package(package) == false){
-            if (lost_alives > R){
+            if (lost_alives >= S){
                 change_state(DISCONNECTED);
                 client_register();
             } else {
                 change_state(REGISTERED);
                 lost_alives++;
             }
+
         } else {
             lost_alives = 0;
             printf("Se ha recibido un paquete ACK\n");
@@ -562,13 +567,15 @@ void package_management_alive() {
             change_state(SEND_ALIVE);
             keep_in_touch();
         }
+
     } else if (package[0] == ALIVE_REJ){
         printf("Se ha recibido un paquete REJ\n");
         change_state(DISCONNECTED);
         client_register();
     }
+
     else{
-        if (lost_alives > S){
+        if (lost_alives >= S){
             change_state(DISCONNECTED);
             alive_try();
         } else {
