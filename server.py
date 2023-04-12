@@ -14,6 +14,20 @@ import time
 import threading
 import random
 
+# Tipus de paquets fase registre
+REGISTER_REQ = 0X00
+REGISTER_ACK = 0X02
+REGISTER_NACK = 0X04
+REGISTER_REJ = 0X06
+ERROR = 0X0F
+NO_RESPONSE = 0X08
+
+# Tipus paquets Alive
+ALIVE_INF = 0X10
+ALIVE_ACK = 0X12
+ALIVE_NACK = 0X14
+ALIVE_REJ = 0X16
+
 from datetime import datetime
 
 configuration_file = "server.cfg"
@@ -26,6 +40,9 @@ debug_mode = False
 
 IP = "127.0.0.1"
 
+
+
+
 def read_parameters():
     global debug_mode, server_data
     global configuration_file
@@ -34,8 +51,7 @@ def read_parameters():
     for parameter in range(1, len(sys.argv)):
         if sys.argv[parameter] == "-c":
             if len(sys.argv) < parameter + 2:
-                print(
-                    "Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
+                print("Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
                 sys.exit()
             else:
                 configuration_file = sys.argv[parameter + 1]
@@ -45,9 +61,7 @@ def read_parameters():
             debug_mode = True
         elif sys.argv[parameter] == "-u":
             if len(sys.argv) < parameter + 2:
-                print(
-                    "Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
-
+                print("Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
                 sys.exit()
             else:
                 acceptedclients_file = sys.argv[parameter + 1]
@@ -75,6 +89,8 @@ def set_parameters(file):
 
 
     return name, MAC, udp_port, tcp_port
+set_parameters(configuration_file)
+name, MAC, udp_port, tcp_port = set_parameters(configuration_file)
 
 def initialize_machine_data(file):
     global machine_data
@@ -100,8 +116,8 @@ def initialize_machine_data(file):
     return machine_data
 
 
-#sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#sock_udp.bind((IP, int(udp_port)))
+sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock_udp.bind((IP, int(udp_port)))
 
 
 def print_debug(message_debug):
@@ -110,25 +126,40 @@ def print_debug(message_debug):
 
 
 def read_commands():
-        command = input("")
-        if command.startswith("quit"):
-            print_debug("Exiting the server")
-            sock_udp.close()
-            sys.exit()
-        elif command == "list":
-            print_debug("Showing the state of the authorized clients")
-            print("STATE\t\tNAME\t\tMAC\t\tRANDOM_NUMBER\t\tIP\n")
-            for client in machine_data:
-                if client[0] == "ALIVE":
-                    print(f"{client[0]}\t\t{client[1]}\t\t{client[2]}\t{client[3]}\t\t\t{client[4]}\n")
-                else:
-                    print(f"{client[0]}\t{client[1]}\t\t{client[2]}\t{client[3]}\t\t\t{client[4]}\n")
-        else:
-            print_debug("Invalid command")
+    command = input("")
+    if command.startswith("quit"):
+        print_debug("Exiting the server")
+        sock_udp.close()
+        sys.exit()
+    elif command == "list":
+        print_debug("Showing the state of the authorized clients")
+        print("STATE\t\tNAME\t\tMAC\t\tRANDOM_NUMBER\t\tIP\n")
+        for client in machine_data:
+            if client[0] == "ALIVE":
+                print(f"{client[0]}\t\t{client[1]}\t\t{client[2]}\t{client[3]}\t\t\t{client[4]}\n")
+            else:
+                print(f"{client[0]}\t{client[1]}\t\t{client[2]}\t{client[3]}\t\t\t{client[4]}\n")
+    else:
+        print_debug("Invalid command")
 
 
+def create_package(package_type, random_number, data):
+    if package_type == REGISTER_ACK:
+        package = struct.pack('B',package_type) + bytes(name + "\0" + MAC + "\0" + random_number + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
+    elif package_type == REGISTER_NACK:
+        package = struct.pack('B',package_type) + bytes("\0\0\0\0\0\0\0" + "000000000000" + "\0" + "000000" + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
+    elif package_type == REGISTER_REJ:
+        package = struct.pack('B',package_type) + bytes("\0\0\0\0\0\0\0" + "000000000000" + "\0" + "000000" + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
+    elif package_type == ALIVE_ACK:
+        package = struct.pack('B',package_type) + bytes(name + "\0" + MAC + "\0" + random_number  + "\0" + data + "\0", 'utf-8')  + struct.pack('78B',*([0]* 78))
+    elif package_type == ALIVE_NACK:
+        package = struct.pack('B',package_type) + bytes("\0\0\0\0\0\0\0" + "000000000000" + "\0" + "000000" + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
+    elif package_type == ALIVE_REJ:
+        package = struct.pack('B',package_type) + bytes("\0\0\0\0\0\0\0" + "000000000000" + "\0" + "000000" + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
+    return package
 
 
 if __name__ == '__main__':
     set_parameters(configuration_file)
     initialize_machine_data(acceptedclients_file)
+    read_commands()
