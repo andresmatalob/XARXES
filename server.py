@@ -41,8 +41,6 @@ debug_mode = False
 IP = "127.0.0.1"
 
 
-
-
 def read_parameters():
     global debug_mode, server_data
     global configuration_file
@@ -115,15 +113,9 @@ def initialize_machine_data(file):
 
     return machine_data
 
-
-sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock_udp.bind((IP, int(udp_port)))
-
-
 def print_debug(message_debug):
     if debug_mode:
         print(f"{datetime.now().time().isoformat(timespec='seconds')}:{message_debug}")
-
 
 def read_commands():
     command = input("")
@@ -158,8 +150,50 @@ def create_package(package_type, random_number, data):
         package = struct.pack('B',package_type) + bytes("\0\0\0\0\0\0\0" + "000000000000" + "\0" + "000000" + "\0" + data + "\0", 'utf-8') + struct.pack('78B',*([0]* 78))
     return package
 
+### FUNCION NUMERO ALEATORIO
+def generate_random():
+    random_number = str(random.randint(0,9))
+    for x in range(0,5):
+        random_number = random_number + str(random.randint(0,9))
+    return random_number
+def manage_package (package, addr):
+    global machine_data
+    if package[0] == REGISTER_REQ:
+        print("REGISTER_REQ received")
+        for machine in range(len(machine_data)):
+            if package[1:8] == bytes([machine][1], 'utf-8') and package[9:21] == bytes([machine][2], 'utf-8') and package[22:28] == bytes([machine][3], 'utf-8'):
+                if machine_data[machine][0] == "DISCONNECTED":
+                    machine_data[machine][0] = "REGISTERED"
+                    machine_data[machine][4] = addr[0] # IP
+                    package = create_package(REGISTER_ACK, package[22:28], generate_random())
+                    sock_udp.sendto(package, addr)
+                    print_debug(f"REGISTER_ACK sent to {addr[0]}")
+                elif machine_data[machine][0] == "REGISTERED" or machine_data[machine][0] == "ALIVE":
+                    package = create_package(REGISTER_ACK, package[22:28], "000000\0")
+                    sock_udp.sendto(package, addr)
+                    print_debug(f"REGISTER_ACK sent to {addr[0]}")
+                else:
+                    package = create_package(REGISTER_NACK, package[1:28], "000000\0", package[29:78], "hay discrepancias en el num aleatorio")
+                    sock_udp.sendto(package, addr)
+                    print_debug(f"REGISTER_NACK sent to {addr[0]}")
+
+            else:
+                package = create_package(REGISTER_REJ, package[1:28], "000000\0", package[29:78], "el equipo no está autorizado")
+                sock_udp.sendto(package, addr)
+                print_debug(f"REGISTER_REJ sent to {addr[0]}")
+
 
 if __name__ == '__main__':
+    read_parameters()
     set_parameters(configuration_file)
     initialize_machine_data(acceptedclients_file)
-    read_commands()
+    sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock_udp.bind((IP, int(udp_port)))
+    while (1):
+        readable, writable, exceptional = select.select([sock_udp, sys.stdin], [], [])
+        for s in readable:
+            if s is sock_udp:
+                message, addr = sock_udp.recvfrom(78)
+                manage_package(message, addr)
+            elif s is sys.stdin:
+                read_commands()
