@@ -5,12 +5,10 @@
 #!/usr/bin/env python3
 
 import sys
-import os
 import datetime
 import socket
 import select
 import struct
-import time
 import threading
 import random
 
@@ -28,6 +26,14 @@ ALIVE_ACK = 0X12
 ALIVE_NACK = 0X14
 ALIVE_REJ = 0X16
 
+#Estados de los clientes
+DISCONNECTED = 0XA0
+WAIT_DB_CHECK = 0XA4
+REGISTERED = 0XA6
+SEND_ALIVE = 0XA8
+
+
+
 from datetime import datetime
 
 configuration_file = "server.cfg"
@@ -40,7 +46,10 @@ debug_mode = False
 
 IP = "127.0.0.1"
 clients_timeout = []
-
+#variables de tiempo
+r = 0
+j = 2
+s = 3
 
 def read_parameters():
     global debug_mode, server_data
@@ -106,7 +115,8 @@ def initialize_machine_data(file):
         machine_data[i].insert(0, "DISCONNECTED")
         machine_data[i][1] = machine_data[i][1].ljust(7, "\0")
         machine_data[i][2] += "\0"
-        machine_data[i] += ["000000\0", ""]
+        machine_data[i] += ["000000\0"]
+        machine_data[i].append(0)
         machine_data[i].append(0) #tiempo en el que se ha recibido el ultimo paquete
         machine_data[i].append(0) #numero de paqutes alives perdidos
 
@@ -214,8 +224,8 @@ def manage_package (package, addr):
                                 sock_udp.sendto(package, addr)
                                 print_debug(f"ALIVE_ACK sent to {addr[0]}")
 
-                                machine_data[machine][4] = get_clock_seconds()
-                                machine_data[machine][5] = 0
+                                machine_data[machine][5] = get_clock_seconds()
+                                machine_data[machine][6] = 0
                                 return
                         else:
                             package = create_package(ALIVE_REJ, "000000\0", "el equipo no está registrado")
@@ -232,10 +242,11 @@ def manage_package (package, addr):
                     sock_udp.sendto(package, addr)
                     print_debug(f"ALIVE_REJ sent to {addr[0]}")
                     return
-
         print_debug("El ALIVE_INF se ha recibido de un cliente no autorizado")
         print_debug("Se envía un ALIVE_REJ")
+
         package = create_package(ALIVE_REJ, machine_data[machine][3],"se ha recibido de un cliente no autorizado, id incorrecto" )
+
         sock_udp.sendto(package, addr)
         return
 
@@ -245,35 +256,44 @@ def manage_package (package, addr):
 def timout_alives():
     global machine_data
     while (1):
-        for x in range (machine_data):
-            if machine_data[x][0] == "ALIVE" or machine_data[x][0] == "REGISTERED":
-                if machine_data[x][5] <= 1:
-                    if machine_data[x][4] >= 6:
-                        print ("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
-                        machine_data[x][0] = "DISCONNECTED"
-                        machine_data[x][4] = ""
-                        machine_data[x][5] = 0
-                else:
-                    if machine_data[x][4] >= 9:
+        for x in range (len(machine_data)):
+            if machine_data[x][0] == REGISTERED:
+                if machine_data[x][5] - get_clock_seconds() <= r:
+                    if machine_data [x][6] >= j:
                         print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
                         machine_data[x][0] = "DISCONNECTED"
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
-    alives_timeout_thread = threading.Thread(target = timout_alives).start()
 
+                    else:
+                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to SEND_ALIVE")
+                        machine_data[x][6] = machine_data[x][6] + 1
+                        machine_data[x][5] = get_clock_seconds()
 
+            elif machine_data[x][0] == SEND_ALIVE:
+                if machine_data[x][5] - get_clock_seconds() <= r:
+                    if machine_data [x][6] >= s:
+                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
+                        machine_data[x][0] = "DISCONNECTED"
+                        machine_data[x][4] = ""
+                        machine_data[x][5] = 0
 
+                    else:
+                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to SEND_ALIVE")
+                        machine_data[x][6] = machine_data[x][6] + 1
+                        machine_data[x][5] = get_clock_seconds()
 
 
 if __name__ == '__main__':
 
-    print(get_clock_seconds())
     name, MAC, udp_port, tcp_port = set_parameters(configuration_file)
     read_parameters()
     set_parameters(configuration_file)
     initialize_machine_data(acceptedclients_file)
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind((IP, int(udp_port)))
+    alives_timeout_thread = threading.Thread(target=timout_alives).start()
+
     while (1):
         readable, writable, exceptional = select.select([sock_udp, sys.stdin], [], [])
         print(readable)
