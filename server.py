@@ -7,6 +7,7 @@
 import sys
 import datetime
 import socket
+import time
 import select
 import struct
 import threading
@@ -47,7 +48,7 @@ debug_mode = False
 IP = "127.0.0.1"
 clients_timeout = []
 #variables de tiempo
-r = 0
+r = 2
 j = 2
 s = 3
 
@@ -112,7 +113,7 @@ def initialize_machine_data(file):
         if machine_data[i] == "":
             continue
         machine_data[i] = machine_data[i].split(" ")
-        machine_data[i].insert(0, "DISCONNECTED")
+        machine_data[i].insert(0, DISCONNECTED)
         machine_data[i][1] = machine_data[i][1].ljust(7, "\0")
         machine_data[i][2] += "\0"
         machine_data[i] += ["000000\0"]
@@ -180,30 +181,43 @@ def manage_package (package, addr):
         print("REGISTER_REQ received")
         for machine in range(len(machine_data)):
             if package[1:8] == bytes(machine_data[machine][1], 'utf-8'):
-                if package[9:21] == bytes(machine_data[machine][2], 'utf-8'):
-                    print(package[9:21])
-                    if package[22:28] == bytes(machine_data[machine][3], 'utf-8'):
-                        print(package[22:28])
-                if machine_data[machine][0] == "DISCONNECTED":
-                    machine_data[machine][0] = "REGISTERED"
-                    machine_data[machine][4] = addr[0] # IP
-                    machine_data[machine][3] = generate_random()+'\0'
-                    print(package)
-                    package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
-                    sock_udp.sendto(package, addr)
-                    print_debug(f"REGISTER_ACK sent to {addr[0]}")
-                    return
-                elif machine_data[machine][0] == "REGISTERED" or machine_data[machine][0] == "ALIVE":
-                    package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
-                    sock_udp.sendto(package, addr)
-                    print_debug(f"REGISTER_ACK sent to {addr[0]}")
-                    return
+                if package[8:21] == bytes(machine_data[machine][2], 'utf-8'):
+                    if package[21:28] == bytes(machine_data[machine][3], 'utf-8'):
+                        print(machine_data[machine][0])
+                        if machine_data[machine][0] == DISCONNECTED:
+                            machine_data[machine][0] = REGISTERED
+                            machine_data[machine][4] = addr[0] # IP
+                            machine_data[machine][3] = generate_random()+'\0'
+                            machine_data[machine][5] = get_clock_seconds()
+                            machine_data[machine][6] = 0 # aunque ya esta a 0 por defecto
+                            print(package)
+                            package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
+                            sock_udp.sendto(package, addr)
+                            print_debug(f"REGISTER_ACK sent to {addr[0]}")
+                            print(machine_data[machine][0])
+                            return
+
+                        elif machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE:
+                            package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
+                            sock_udp.sendto(package, addr)
+                            print_debug(f"REGISTER_ACK sent to {addr[0]}")
+                            return
+                        else:
+                            package = create_package(REGISTER_REJ, "000000\0", "no está autorizado")
+                            sock_udp.sendto(package, addr)
+                            print_debug(f"REGISTER_REJ sent to {addr[0]}")
+                            return
+                    else:
+                        package = create_package(REGISTER_NACK, "000000\0", "hay discrepancia en el número aleatorio")
+                        sock_udp.sendto(package, addr)
+                        print_debug(f"REGISTER_NACK sent to {addr[0]}")
+                        return
                 else:
-                    package = create_package(REGISTER_NACK, "000000\0", "hay discrepancias en el num aleatorio")
+                    package = create_package(REGISTER_NACK, package[9:21], "IP no válida")
                     sock_udp.sendto(package, addr)
                     print_debug(f"REGISTER_NACK sent to {addr[0]}")
                     return
-        print("£££££££££££££££££££££££££££££££")
+
         package = create_package(REGISTER_REJ, "000000\0", "el equipo no está autorizado")
         sock_udp.sendto(package, addr)
         print_debug(f"REGISTER_REJ sent to {addr[0]}")
@@ -215,17 +229,18 @@ def manage_package (package, addr):
             if package[1:8] == bytes(machine_data[machine][1], 'utf-8'):
                 if package[8:21] == bytes(machine_data[machine][2], 'utf-8'):
                     if package[21:28] == bytes(machine_data[machine][3], 'utf-8'):
-                        if machine_data[machine][0] == "REGISTERED" or machine_data[machine][0] == "ALIVE" :
+                        print(machine_data[machine][0])
+                        if machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE :
                             if machine_data[machine][4] == addr[0]:
-                                if machine_data[machine][0] == "REGISTERED":
+                                if machine_data[machine][0] == REGISTERED:
                                     print ("Client numero " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
-                                    machine_data[machine][0] = "ALIVE"
+                                    machine_data[machine][0] = SEND_ALIVE
+                                machine_data[machine][5] = get_clock_seconds()
+                                machine_data[machine][6] = 0
                                 package = create_package(ALIVE_ACK, machine_data[machine][3], "")
                                 sock_udp.sendto(package, addr)
                                 print_debug(f"ALIVE_ACK sent to {addr[0]}")
 
-                                machine_data[machine][5] = get_clock_seconds()
-                                machine_data[machine][6] = 0
                                 return
                         else:
                             package = create_package(ALIVE_REJ, "000000\0", "el equipo no está registrado")
@@ -256,30 +271,33 @@ def manage_package (package, addr):
 def timout_alives():
     global machine_data
     while (1):
+        time.sleep(0.1)
         for x in range (len(machine_data)):
             if machine_data[x][0] == REGISTERED:
-                if machine_data[x][5] - get_clock_seconds() <= r:
+                time.sleep(0.1)
+                if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= j:
                         print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
-                        machine_data[x][0] = "DISCONNECTED"
+                        machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
 
                     else:
-                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to SEND_ALIVE")
+                        print("Client numero " + str(x + 1) + ": Lost Alive when registered, alives lost = " + str(machine_data[x][6]))
                         machine_data[x][6] = machine_data[x][6] + 1
                         machine_data[x][5] = get_clock_seconds()
 
             elif machine_data[x][0] == SEND_ALIVE:
-                if machine_data[x][5] - get_clock_seconds() <= r:
+                time.sleep(0.1)
+                if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= s:
                         print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
-                        machine_data[x][0] = "DISCONNECTED"
+                        machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
 
                     else:
-                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to SEND_ALIVE")
+                        print("Client numero " + str(x + 1) + ": Lost Alive, alives lost = " + str(machine_data[x][6]))
                         machine_data[x][6] = machine_data[x][6] + 1
                         machine_data[x][5] = get_clock_seconds()
 
@@ -297,9 +315,9 @@ if __name__ == '__main__':
     while (1):
         readable, writable, exceptional = select.select([sock_udp, sys.stdin], [], [])
         print(readable)
-        for s in readable:
-            if s is sock_udp:
+        for descriptor in readable:
+            if descriptor is sock_udp:
                 message, addr = sock_udp.recvfrom(78)
                 manage_package(message, addr)
-            elif s is sys.stdin:
+            elif descriptor is sys.stdin:
                 read_commands()
