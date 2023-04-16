@@ -81,6 +81,10 @@ read_parameters()
 def print_debug(message_debug):
     if debug_mode == True:
         print (str(datetime.now().time())[:8] + ": " + "DEBUG " + "=> " + message_debug)
+def print_message(message):
+    if debug_mode == True:
+        print (str(datetime.now().time())[:8] + ": " + "MSG. " + "=> " + message)
+
 def set_parameters(file):
     global configuration_file
     with open(file) as f:
@@ -123,7 +127,8 @@ def initialize_machine_data(file):
 def read_commands():
     command = input("")
     if command.startswith("quit"):
-        print_debug("Exiting the server")
+        print_debug("End of request")
+        print_debug("Control alives timer canceled")
         sock_udp.close()
         sys.exit()
     elif command == "list":
@@ -219,7 +224,7 @@ def manage_package (package, addr):
                         if machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE :
                             if machine_data[machine][4] == addr[0]:
                                 if machine_data[machine][0] == REGISTERED:
-                                    print_debug ("Client " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
+                                    print_message ("Client " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
                                     machine_data[machine][0] = SEND_ALIVE
                                 machine_data[machine][5] = get_clock_seconds()
                                 machine_data[machine][6] = 0
@@ -262,7 +267,7 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= j:
-                        print_debug("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
+                        print_message("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
@@ -275,7 +280,7 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= s:
-                        print_debug("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
+                        print_message("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
