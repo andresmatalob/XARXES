@@ -13,7 +13,7 @@ import struct
 import threading
 import random
 
-# Tipus de paquets fase registre
+# Register packages
 REGISTER_REQ = 0X00
 REGISTER_ACK = 0X02
 REGISTER_NACK = 0X04
@@ -21,13 +21,13 @@ REGISTER_REJ = 0X06
 ERROR = 0X0F
 NO_RESPONSE = 0X08
 
-# Tipus paquets Alive
+# Alive packages
 ALIVE_INF = 0X10
 ALIVE_ACK = 0X12
 ALIVE_NACK = 0X14
 ALIVE_REJ = 0X16
 
-#Estados de los clientes
+# Client's states
 DISCONNECTED = 0XA0
 WAIT_DB_CHECK = 0XA4
 REGISTERED = 0XA6
@@ -39,14 +39,11 @@ from datetime import datetime
 
 configuration_file = "server.cfg"
 acceptedclients_file = "equips.dat"
-
-
 machine_data = []
-
 debug_mode = False
-
 IP = "127.0.0.1"
 clients_timeout = []
+
 #variables de tiempo
 r = 2
 j = 2
@@ -60,7 +57,7 @@ def read_parameters():
     for parameter in range(1, len(sys.argv)):
         if sys.argv[parameter] == "-c":
             if len(sys.argv) < parameter + 2:
-                print("Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
+                print_debug("Parameter error, possible parameters:\n\t-c:\tAllows you to specify the file where configuration is stored, followed by the route of the configuration file.\n\t-d:\tActivates the debug mode.\n");
                 sys.exit()
             else:
                 configuration_file = sys.argv[parameter + 1]
@@ -70,16 +67,20 @@ def read_parameters():
             debug_mode = True
         elif sys.argv[parameter] == "-u":
             if len(sys.argv) < parameter + 2:
-                print("Parametro erroneo, posibles parametross:\n\t-c:\tEspecifica el nombre del archivo de donde se leerán los datos necesarios para la comunicación entre cliente y servidor\n\t-d:\tActiva el debug mode.\n");
+                print_debug("Parameter error, possible parameters:\n\t-c:\tAllows you to specify the file where configuration is stored, followed by the route of the configuration file.\n\t-d:\tActivates the debug mode.\n\t-u:\tAllows you to specify the file where authorized machines data is stored, followed by the route of the authorized machines file.");
                 sys.exit()
             else:
                 acceptedclients_file = sys.argv[parameter + 1]
         elif sys.argv[parameter - 1] == "-u":
             pass
         else:
+            print_debug("Parameter error, possible parameters:\n\t-c:\tAllows you to specify the file where configuration is stored, followed by the route of the configuration file.\n\t-d:\tActivates the debug mode.\n\t-u:\tAllows you to specify the file where authorized machines data is stored, followed by the route of the authorized machines file.")
             sys.exit()
 read_parameters()
 
+def print_debug(message_debug):
+    if debug_mode == True:
+        print (str(datetime.now().time())[:8] + ": " + "DEBUG " + "=> " + message_debug)
 def set_parameters(file):
     global configuration_file
     with open(file) as f:
@@ -90,9 +91,7 @@ def set_parameters(file):
             server_data.pop(line)
     for line in range(len(server_data)):
         server_data[line] = server_data[line].split(" ")
-    print("Datos del servidor extraidos del archivo ")
-    for line in server_data:
-        print(line)
+
 
     name, MAC, udp_port, tcp_port = server_data[0][1], server_data[1][1], server_data[2][1], server_data[3][1]
 
@@ -120,18 +119,6 @@ def initialize_machine_data(file):
         machine_data[i].append(0)
         machine_data[i].append(0) #tiempo en el que se ha recibido el ultimo paquete
         machine_data[i].append(0) #numero de paqutes alives perdidos
-
-
-
-    print("Datos de las máquinas extraidos del archivo ")
-    for line in machine_data:
-        print(line)
-    print(machine_data)
-    return machine_data
-
-def print_debug(message_debug):
-    if debug_mode:
-        print(f"{datetime.now().time().isoformat(timespec='seconds')}:{message_debug}")
 
 def read_commands():
     command = input("")
@@ -178,23 +165,23 @@ def get_clock_seconds():
 def manage_package (package, addr):
     global machine_data
     if package[0] == REGISTER_REQ:
-        print("REGISTER_REQ received")
+        print_debug("Receive: REGISTER_REQ")
         for machine in range(len(machine_data)):
             if package[1:8] == bytes(machine_data[machine][1], 'utf-8'):
                 if package[8:21] == bytes(machine_data[machine][2], 'utf-8'):
                     if package[21:28] == bytes(machine_data[machine][3], 'utf-8'):
-                        print(machine_data[machine][0])
                         if machine_data[machine][0] == DISCONNECTED:
                             machine_data[machine][0] = REGISTERED
                             machine_data[machine][4] = addr[0] # IP
                             machine_data[machine][3] = generate_random()+'\0'
                             machine_data[machine][5] = get_clock_seconds()
                             machine_data[machine][6] = 0 # aunque ya esta a 0 por defecto
-                            print(package)
+                            print_debug("Registered Accepted")
+                            print_debug("REGISTERED")
                             package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
                             sock_udp.sendto(package, addr)
+
                             print_debug(f"REGISTER_ACK sent to {addr[0]}")
-                            print(machine_data[machine][0])
                             return
 
                         elif machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE:
@@ -203,37 +190,36 @@ def manage_package (package, addr):
                             print_debug(f"REGISTER_ACK sent to {addr[0]}")
                             return
                         else:
-                            package = create_package(REGISTER_REJ, "000000\0", "no está autorizado")
+                            package = create_package(REGISTER_REJ, "000000\0", "device unauthorized")
                             sock_udp.sendto(package, addr)
                             print_debug(f"REGISTER_REJ sent to {addr[0]}")
                             return
                     else:
-                        package = create_package(REGISTER_NACK, "000000\0", "hay discrepancia en el número aleatorio")
+                        package = create_package(REGISTER_NACK, "000000\0", "Wrong random number")
                         sock_udp.sendto(package, addr)
                         print_debug(f"REGISTER_NACK sent to {addr[0]}")
                         return
                 else:
-                    package = create_package(REGISTER_NACK, package[9:21], "IP no válida")
+                    package = create_package(REGISTER_NACK, package[9:21], "Wrong IP")
                     sock_udp.sendto(package, addr)
                     print_debug(f"REGISTER_NACK sent to {addr[0]}")
                     return
 
-        package = create_package(REGISTER_REJ, "000000\0", "el equipo no está autorizado")
+        package = create_package(REGISTER_REJ, "000000\0", "device unauthorized")
         sock_udp.sendto(package, addr)
         print_debug(f"REGISTER_REJ sent to {addr[0]}")
         return
 
     elif package[0] == ALIVE_INF:
-        print("ALIVE_INF received")
+        print_debug("ALIVE_INF received")
         for machine in range(len(machine_data)):
             if package[1:8] == bytes(machine_data[machine][1], 'utf-8'):
                 if package[8:21] == bytes(machine_data[machine][2], 'utf-8'):
                     if package[21:28] == bytes(machine_data[machine][3], 'utf-8'):
-                        print(machine_data[machine][0])
                         if machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE :
                             if machine_data[machine][4] == addr[0]:
                                 if machine_data[machine][0] == REGISTERED:
-                                    print ("Client numero " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
+                                    print_debug ("Client " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
                                     machine_data[machine][0] = SEND_ALIVE
                                 machine_data[machine][5] = get_clock_seconds()
                                 machine_data[machine][6] = 0
@@ -243,25 +229,24 @@ def manage_package (package, addr):
 
                                 return
                         else:
-                            package = create_package(ALIVE_REJ, "000000\0", "el equipo no está registrado")
+                            package = create_package(ALIVE_REJ, "000000\0", "device not registered")
                             sock_udp.sendto(package, addr)
                             print_debug(f"ALIVE_REJ sent to {addr[0]}")
                             return
                     else:
-                        package = create_package(ALIVE_NACK, "000000\0","numero aleatorio incorrecta")
+                        package = create_package(ALIVE_NACK, "000000\0","wrong random number")
                         sock_udp.sendto(package, addr)
                         print_debug(f"ALIVE_NACK sent to {addr[0]}")
                         return
                 else:
-                    package = create_package(ALIVE_REJ, "000000\0", "el equipo no está autorizado, @ MAC incorrecta")
+                    package = create_package(ALIVE_REJ, "000000\0", "device unauthorized, wrong MAC ")
                     sock_udp.sendto(package, addr)
                     print_debug(f"ALIVE_REJ sent to {addr[0]}")
                     return
-        print_debug("El ALIVE_INF se ha recibido de un cliente no autorizado")
-        print_debug("Se envía un ALIVE_REJ")
+        print_debug("ALIVE_INF from an unauthorized client")
+        print_debug("Send an ALIVE_REJ")
 
-        package = create_package(ALIVE_REJ, machine_data[machine][3],"se ha recibido de un cliente no autorizado, id incorrecto" )
-
+        package = create_package(ALIVE_REJ, machine_data[machine][3],"received from an unauthorized client, wrong id" )
         sock_udp.sendto(package, addr)
         return
 
@@ -277,13 +262,12 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= j:
-                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
+                        print_debug("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
 
                     else:
-                        print("Client numero " + str(x + 1) + ": Lost Alive when registered, alives lost = " + str(machine_data[x][6]))
                         machine_data[x][6] = machine_data[x][6] + 1
                         machine_data[x][5] = get_clock_seconds()
 
@@ -291,13 +275,12 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= s:
-                        print("Client numero " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED")
+                        print_debug("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
 
                     else:
-                        print("Client numero " + str(x + 1) + ": Lost Alive, alives lost = " + str(machine_data[x][6]))
                         machine_data[x][6] = machine_data[x][6] + 1
                         machine_data[x][5] = get_clock_seconds()
 
@@ -314,7 +297,6 @@ if __name__ == '__main__':
 
     while (1):
         readable, writable, exceptional = select.select([sock_udp, sys.stdin], [], [])
-        print(readable)
         for descriptor in readable:
             if descriptor is sock_udp:
                 message, addr = sock_udp.recvfrom(78)
