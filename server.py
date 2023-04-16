@@ -35,7 +35,7 @@ SEND_ALIVE = 0XA8
 
 
 
-from datetime import datetime
+from datetime import datetime #debug
 
 configuration_file = "server.cfg"
 acceptedclients_file = "equips.dat"
@@ -50,9 +50,9 @@ j = 2
 s = 3
 
 def read_parameters():
-    global debug_mode, server_data
-    global configuration_file
-    global acceptedclients_file
+    global debug_mode, server_data #variables globales
+    global configuration_file #ruta del archivo de configuracion
+    global acceptedclients_file #ruta del archivo de clientes autorizados
 
     for parameter in range(1, len(sys.argv)):
         if sys.argv[parameter] == "-c":
@@ -81,15 +81,13 @@ read_parameters()
 def print_debug(message_debug):
     if debug_mode == True:
         print (str(datetime.now().time())[:8] + ": " + "DEBUG " + "=> " + message_debug)
-def print_message(message):
-    if debug_mode == True:
-        print (str(datetime.now().time())[:8] + ": " + "MSG. " + "=> " + message)
+
 
 def set_parameters(file):
     global configuration_file
     with open(file) as f:
         server_data = f.readlines()
-    server_data = [x.strip() for x in server_data]
+    server_data = [x.strip() for x in server_data] # remove '\n' at the end of each line
     for line in range(len(server_data)):
         if server_data[line] == "":
             server_data.pop(line)
@@ -115,8 +113,8 @@ def initialize_machine_data(file):
     for i in range(len(machine_data)):
         if machine_data[i] == "":
             continue
-        machine_data[i] = machine_data[i].split(" ")
-        machine_data[i].insert(0, DISCONNECTED)
+        machine_data[i] = machine_data[i].split(" ") # Split each line into a list
+        machine_data[i].insert(0, DISCONNECTED) # Insert the state of the client
         machine_data[i][1] = machine_data[i][1].ljust(7, "\0")
         machine_data[i][2] += "\0"
         machine_data[i] += ["000000\0"]
@@ -165,7 +163,7 @@ def generate_random():
         random_number = random_number + str(random.randint(0,9))
     return random_number
 
-def get_clock_seconds():
+def get_clock_seconds(): # Return the seconds of the clock
     return int(str(datetime.now().time())[0:2])*3600 + int(str(datetime.now().time())[3:5])*60 + int(str(datetime.now().time())[6:8])
 def manage_package (package, addr):
     global machine_data
@@ -180,7 +178,7 @@ def manage_package (package, addr):
                             machine_data[machine][4] = addr[0] # IP
                             machine_data[machine][3] = generate_random()+'\0'
                             machine_data[machine][5] = get_clock_seconds()
-                            machine_data[machine][6] = 0 # aunque ya esta a 0 por defecto
+                            machine_data[machine][6] = 0 # aunque ya está a 0 por defecto
                             print_debug("Registered Accepted")
                             print_debug("REGISTERED")
                             package = create_package(REGISTER_ACK, machine_data[machine][3], tcp_port)
@@ -224,7 +222,7 @@ def manage_package (package, addr):
                         if machine_data[machine][0] == REGISTERED or machine_data[machine][0] == SEND_ALIVE :
                             if machine_data[machine][4] == addr[0]:
                                 if machine_data[machine][0] == REGISTERED:
-                                    print_message ("Client " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
+                                    print_debug("MSG. => Client " + str(machine + 1) + ": State changed from REGISTERED to ALIVE")
                                     machine_data[machine][0] = SEND_ALIVE
                                 machine_data[machine][5] = get_clock_seconds()
                                 machine_data[machine][6] = 0
@@ -267,7 +265,7 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= j:
-                        print_message("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
+                        print_debug("MSG. => Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
@@ -280,7 +278,7 @@ def timout_alives():
                 time.sleep(0.1)
                 if get_clock_seconds() - machine_data[x][5] >= r:
                     if machine_data [x][6] >= s:
-                        print_message("Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
+                        print_debug("MSG. => Device " + str(x + 1) + ": State changed from ALIVE to DISCONNECTED (Don't receive 3 ALIVE consecutives")
                         machine_data[x][0] = DISCONNECTED
                         machine_data[x][4] = ""
                         machine_data[x][5] = 0
@@ -298,8 +296,7 @@ if __name__ == '__main__':
     initialize_machine_data(acceptedclients_file)
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind((IP, int(udp_port)))
-    alives_timeout_thread = threading.Thread(target=timout_alives).start()
-
+    alives_timeout_thread = threading.Thread(target=timout_alives).start() #thread para temporización de alives
     while (1):
         readable, writable, exceptional = select.select([sock_udp, sys.stdin], [], [])
         for descriptor in readable:
